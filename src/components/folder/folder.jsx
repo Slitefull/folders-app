@@ -5,28 +5,11 @@ import ToggleIcon from '../../ui-kit/toggle-icon/toggle-icon.jsx';
 import { generateUniqueId } from '../../utils/generateUniqId.js';
 import FolderIcon from '../../ui-kit/folder-icon/folder-icon.jsx';
 
-function checkIsOpenedByDefault(openedFolders, folderPath) {
-  if (!folderPath) return false;
-  if (openedFolders.includes(folderPath)) {
-    return true;
-  }
-
-  for (let openedFolder of openedFolders) {
-    if (openedFolder.startsWith(folderPath + '/') || folderPath === openedFolder + '/') {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 class Folder extends Component {
   constructor(props) {
     super(props);
-    this.expand = this.expand.bind(this);
-
     this.state = {
-      expanded: checkIsOpenedByDefault(this.props.expandedFolders, this.props.fullPath)
+      expanded: this.checkIsOpenedByDefault(this.props.expandedFolders, this.props.fullPath)
     };
   }
 
@@ -34,36 +17,64 @@ class Folder extends Component {
     this.setState({ expanded: !this.state.expanded });
   };
 
+  checkIsOpenedByDefault = (openedFolders, folderPath) => {
+    if (!folderPath) return false;
+    if (openedFolders.includes(folderPath)) {
+      return true;
+    }
+
+    for (let openedFolder of openedFolders) {
+      if (openedFolder.startsWith(folderPath + '/') || folderPath === openedFolder + '/') {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  filterFolders = (folders, searchQuery) => {
+    if (!folders) return []; // Return an empty array if folders is null or undefined
+    if (!searchQuery) return folders;
+
+    return folders.filter((item) => {
+      if (item.type === 'FILE') {
+        return item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      } else if (item.type === 'FOLDER') {
+        const includesSearchQuery = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const filteredChildren = this.filterFolders(item.children, searchQuery);
+        return includesSearchQuery || filteredChildren.length > 0;
+      }
+      return false;
+    });
+  };
 
   render() {
-    if (this.props.type === 'FILE') {
-      return <File name={this.props.name} mime={this.props.mime}/>;
+    const { children, searchQuery, type, name, expandedFolders } = this.props;
+    const filteredChildren = this.filterFolders(children, searchQuery);
+
+    if (type === 'FOLDER' && !filteredChildren.length) return null;
+
+    if (type === 'FILE') {
+      return <File name={name} />;
     }
 
     return (
       <div className="pl-2 mb-1">
         <button className="flex flex-row items-center" onClick={this.expand}>
-          <FolderIcon className="mr-2"/>
-          {this.props.name}
-          <ToggleIcon className={cx('ml-2 transition-transform', { 'rotate-90': this.state.expanded })}/>
+          <FolderIcon className="mr-2" />
+          {name}
+          <ToggleIcon className={cx('ml-2 transition-transform', { 'rotate-90': this.state.expanded })} />
         </button>
         {this.state.expanded && (
-          this.props.children?.map((child) => {
-            return (
-              <div className="pl-4">
-                <Folder
-                  key={generateUniqueId()}
-                  expanded={this.props.expanded}
-                  children={child.children}
-                  name={child.name}
-                  type={child.type}
-                  mime={child.mime}
-                  fullPath={child.fullPath}
-                  expandedFolders={this.props.expandedFolders}
-                />
-              </div>
-            );
-          })
+          filteredChildren.map((child) => (
+            <div className="pl-4" key={generateUniqueId()}>
+              <Folder
+                expandedFolders={expandedFolders}
+                searchQuery={searchQuery}
+                {...child}
+              />
+            </div>
+          ))
         )}
       </div>
     );
